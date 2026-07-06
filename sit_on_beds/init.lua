@@ -135,25 +135,24 @@ minetest.register_globalstep(function(dtime)
         local player = minetest.get_player_by_name(pname)
         if not player then
             players_sitting[pname] = nil
-            continue
+        else
+            -- Check if player wants to stand up (sneak key)
+            if player:get_control().sneak then
+                stand_up(player)
+            else
+                -- Keep player positioned correctly while allowing look rotation
+                local current_pos = player:get_pos()
+                local expected_pos = vector.add(sit_data.pos, {x = 0, y = 0.5, z = 0})
+                
+                -- Only update position if significantly different (to avoid jitter)
+                if vector.distance(current_pos, expected_pos) > 0.1 then
+                    player:set_pos(expected_pos)
+                end
+                
+                -- Preserve the yaw from sit_data but allow looking around
+                -- The player can rotate their view freely while sitting
+            end
         end
-        
-        -- Check if player wants to stand up (sneak key)
-        if player:get_control().sneak then
-            stand_up(player)
-        end
-        
-        -- Keep player positioned correctly while allowing look rotation
-        local current_pos = player:get_pos()
-        local expected_pos = vector.add(sit_data.pos, {x = 0, y = 0.5, z = 0})
-        
-        -- Only update position if significantly different (to avoid jitter)
-        if vector.distance(current_pos, expected_pos) > 0.1 then
-            player:set_pos(expected_pos)
-        end
-        
-        -- Preserve the yaw from sit_data but allow looking around
-        -- The player can rotate their view freely while sitting
     end
 end)
 
