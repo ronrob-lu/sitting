@@ -7,14 +7,25 @@ local players_sitting = {}
 
 -- Check if it's daytime (sun visibility and time of day)
 local function is_daytime()
-    local time = minetest.get_time()
-    -- Handle different return types: some versions return a table {day = x, sec = y}
-    if type(time) == "table" then
-        time = time.day or 0
-    elseif type(time) ~= "number" then
-        -- Fallback: try get_day_time if available
-        time = minetest.get_day_time and minetest.get_day_time() or 0.5
+    local time = nil
+    
+    -- Try different time APIs depending on Minetest/Luanti version
+    if minetest.get_day_time then
+        time = minetest.get_day_time()
+    elseif minetest.get_time then
+        local t = minetest.get_time()
+        if type(t) == "table" then
+            time = t.day or 0
+        elseif type(t) == "number" then
+            time = t
+        end
     end
+    
+    -- Fallback to midday if no time API available
+    if time == nil then
+        time = 0.5
+    end
+    
     -- Time is between 0.2 (dawn) and 0.708 (dusk) approximately
     return time >= 0.2 and time < 0.708
 end
