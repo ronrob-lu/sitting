@@ -8,8 +8,12 @@ local players_sitting = {}
 -- Check if it's daytime (sun visibility and time of day)
 local function is_daytime()
     local time = minetest.get_time()
-    if not time then
-        return true
+    -- Handle different return types: some versions return a table {day = x, sec = y}
+    if type(time) == "table" then
+        time = time.day or 0
+    elseif type(time) ~= "number" then
+        -- Fallback: try get_day_time if available
+        time = minetest.get_day_time and minetest.get_day_time() or 0.5
     end
     -- Time is between 0.2 (dawn) and 0.708 (dusk) approximately
     return time >= 0.2 and time < 0.708

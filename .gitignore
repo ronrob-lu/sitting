@@ -1,1 +1,76 @@
-(empty)
+```
+# Configuration files
+*.cfg
+*.conf
+*.ini
+*.toml
+*.yml
+*.yaml
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+*.env.*
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build outputs
+build/
+dist/
+target/
+
+# Dependencies
+node_modules/
+vendor/
+
+# Python specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.coverage
+htmlcov/
+.coverage.*
+.python-version
+
+# Compiled files
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+*.exe
+
+# Archives
+*.zip
+*.tar.gz
+*.tar.xz
+*.tar.bz2
+*.gz
+*.rar
+*.7z
+
+# Lua specific
+.luac
+?.luac
+*.luac
+```
