@@ -5,9 +5,6 @@
 
 local players_sitting = {}
 
--- Store original bed on_rightclick if it exists
-local original_bed_on_rightclick = nil
-
 -- Check if it's daytime (sun visibility and time of day)
 local function is_daytime()
     local time = minetest.get_time()
@@ -117,25 +114,11 @@ local function get_sit_yaw(pos, node)
     return 0
 end
 
--- Handle rightclick on nodes
-local old_handle_rightclick = minetest.itemplace_node
-
-minetest.register_on_placenode(function(pos, newnode, placer, oldnode, itemstack, pointed_thing)
-    -- This is handled differently, we'll use on_rightclick override instead
-end)
-
--- Override bed interaction
-minetest.register_on_punchnode(function(pos, node, puncher, pointed_thing)
-    -- Not used for sitting, but keeping for reference
-end)
-
 -- Register globalstep to handle sitting players
 minetest.register_globalstep(function(dtime)
     for pname, sit_data in pairs(players_sitting) do
         local player = minetest.get_player_by_name(pname)
-        if not player then
-            players_sitting[pname] = nil
-        else
+        if player then
             -- Check if player wants to stand up (sneak key)
             if player:get_control().sneak then
                 stand_up(player)
@@ -148,10 +131,10 @@ minetest.register_globalstep(function(dtime)
                 if vector.distance(current_pos, expected_pos) > 0.1 then
                     player:set_pos(expected_pos)
                 end
-                
-                -- Preserve the yaw from sit_data but allow looking around
-                -- The player can rotate their view freely while sitting
             end
+        else
+            -- Player disconnected, clean up
+            players_sitting[pname] = nil
         end
     end
 end)
