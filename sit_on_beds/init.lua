@@ -153,7 +153,8 @@ minetest.register_globalstep(function(dtime)
         local player = minetest.get_player_by_name(pname)
         if player then
             -- Check if player wants to stand up (sneak key)
-            if player:get_control().sneak then
+            local controls = player:get_player_control()
+            if controls and controls.sneak then
                 stand_up(player)
             end
             -- Player can look around freely while attached, no need to update position
