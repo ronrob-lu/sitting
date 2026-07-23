@@ -89,7 +89,10 @@ local function sit_on_bed(player, pos, yaw)
     player:set_look_horizontal(yaw)
 
     -- Disable physics to prevent floating/falling
-    player:set_physics_override(0, 0, 0)
+    -- Newer versions require a table: {speed, jump, gravity, sneak, sneak_glitch}
+    if player.set_physics_override then
+        player:set_physics_override({speed = 0, jump = 0, gravity = 0, sneak = true})
+    end
 
     -- Apply sitting animation with slight delay to ensure attachment is processed
     minetest.after(0.1, function()
@@ -97,19 +100,24 @@ local function sit_on_bed(player, pos, yaw)
         if not p then return end
         
         -- Force animation update
-        p:set_animation_frame_offset(0)
+        if p.set_animation_frame_offset then
+            p:set_animation_frame_offset(0)
+        end
         
-        if minetest.get_modpath("mcl_player") and mcl_player.player_set_animation then
+        local anim_set = false
+        if minetest.get_modpath("mcl_player") and mcl_player and mcl_player.player_set_animation then
             -- Mineclone 2 animation
             mcl_player.player_set_animation(p, "sit_mount", 30)
-        elseif minetest.get_modpath("player_api") and player_api.set_animation then
+            anim_set = true
+        elseif minetest.get_modpath("player_api") and player_api and player_api.set_animation then
             -- Standard Minetest animation
             player_api.set_animation(p, "sit", 30)
-        else
-            -- Fallback: try direct method if APIs not available
-            if p.set_animation then
-                p:set_animation("sit", 30)
-            end
+            anim_set = true
+        end
+        
+        -- Fallback: try direct method if APIs not available
+        if not anim_set and p.set_animation then
+            p:set_animation("sit", 30)
         end
     end)
 
