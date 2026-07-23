@@ -57,7 +57,8 @@ local function sit_on_bed(player, pos, yaw)
     -- Calculate sit position: Center of node horizontally, surface level vertically
     -- X/Z offset 0.5 centers player on the node
     -- Y offset 0.0 places entity at node base, we'll adjust via attachment
-    local sit_pos = vector.add(pos, {x = 0.5, y = 0.0, z = 0.5})
+    -- FIX: Adjust X by -0.25 to counteract the "standing too far right" issue
+    local sit_pos = vector.add(pos, {x = 0.25, y = 0.0, z = 0.5})
     
     -- Create invisible seat entity at the sitting position
     local seat = minetest.add_entity(sit_pos, "sit_on_beds:seat")
@@ -78,27 +79,37 @@ local function sit_on_bed(player, pos, yaw)
     }
 
     -- Attach player to the seat entity
-    -- Adjust Y offset to place player ON the bed surface (not floating)
-    -- Negative Y lowers the player relative to the entity
-    player:set_attach(seat, "", {x = 0, y = -0.45, z = 0}, {x = 0, y = 0, z = 0})
+    -- Adjust offsets to place player ON the bed surface (not floating or offset)
+    -- X: -0.25 corrects right-side offset
+    -- Y: -0.55 lowers player firmly onto the bed
+    -- Z: 0 keeps centered
+    player:set_attach(seat, "", {x = -0.25, y = -0.55, z = 0}, {x = 0, y = 0, z = 0})
 
     -- Set the player's rotation to match the bed
     player:set_look_horizontal(yaw)
+
+    -- Disable physics to prevent floating/falling
+    player:set_physics_override(0, 0, 0)
 
     -- Apply sitting animation with slight delay to ensure attachment is processed
     minetest.after(0.1, function()
         local p = minetest.get_player_by_name(pname)
         if not p then return end
         
-        if minetest.get_modpath("mcl_player") then
+        -- Force animation update
+        p:set_animation_frame_offset(0)
+        
+        if minetest.get_modpath("mcl_player") and mcl_player.player_set_animation then
             -- Mineclone 2 animation
             mcl_player.player_set_animation(p, "sit_mount", 30)
-        elseif minetest.get_modpath("player_api") then
+        elseif minetest.get_modpath("player_api") and player_api.set_animation then
             -- Standard Minetest animation
             player_api.set_animation(p, "sit", 30)
         else
             -- Fallback: try direct method if APIs not available
-            p:set_animation("sit", 30)
+            if p.set_animation then
+                p:set_animation("sit", 30)
+            end
         end
     end)
 
