@@ -55,10 +55,9 @@ local function sit_on_bed(player, pos, yaw)
     local pname = player:get_player_name()
 
     -- Calculate sit position: Center of node horizontally, surface level vertically
-    -- X/Z offset 0.5 centers player on the node
-    -- Y offset 0.0 places entity at node base, we'll adjust via attachment
-    -- FIX: Adjust X by -0.25 to counteract the "standing too far right" issue
-    local sit_pos = vector.add(pos, {x = 0.25, y = 0.0, z = 0.5})
+    -- Standard bed node is 1x1x1. Center is at x+0.5, z+0.5 relative to node corner.
+    -- We spawn the seat entity slightly above the node base so attachment Y can bring it down.
+    local sit_pos = vector.add(pos, {x = 0.5, y = 0.5, z = 0.5})
     
     -- Create invisible seat entity at the sitting position
     local seat = minetest.add_entity(sit_pos, "sit_on_beds:seat")
@@ -79,43 +78,61 @@ local function sit_on_bed(player, pos, yaw)
     }
 
     -- Attach player to the seat entity
-    -- Adjust offsets to place player ON the bed surface (not floating or offset)
-    -- X: -0.25 corrects right-side offset
-    -- Y: -0.55 lowers player firmly onto the bed
-    -- Z: 0 keeps centered
-    player:set_attach(seat, "", {x = -0.25, y = -0.55, z = 0}, {x = 0, y = 0, z = 0})
+    -- Offsets are relative to the seat entity's position
+    -- We want the player's feet to be on the bed surface (y=0 relative to node top)
+    -- Seat is at y+0.5 (middle of node). Player attach point is usually at feet.
+    -- So we need to move player down by roughly 0.5 to stand on top of the bed block? 
+    -- Actually, beds are often 0.5 high visually but full node collision.
+    -- Let's try putting the seat at the top surface (y + 0.5 from bottom, which is pos.y + 0.5)
+    -- And attach player with small negative Y to sink into mattress slightly.
+    
+    -- Refined offsets:
+    -- Seat spawned at pos + {0.5, 0.5, 0.5} (center of node)
+    -- To sit ON TOP, we want player feet at pos.y + 0.5 (top of node) or slightly lower for mattress.
+    -- If seat is at center (0.5), and we attach player with y = -0.5, player feet will be at seat_y - 0.5 = 0.0 (bottom). That's too low.
+    -- Let's spawn seat at top surface: pos + {0.5, 0.5, 0.5} is center. Top surface is pos.y + 1.
+    -- Let's change spawn pos to top surface: {x=0.5, y=1.0, z=0.5} relative to pos? No, pos is the node pos (integer).
+    -- Node occupies [pos.x, pos.x+1], [pos.y, pos.y+1], [pos.z, pos.z+1].
+    -- Top surface center is {pos.x+0.5, pos.y+1, pos.z+0.5}.
+    -- Let's spawn seat there.
+    
+    seat:remove() -- Remove the one created at center
+    local top_pos = vector.add(pos, {x = 0.5, y = 1.0, z = 0.5})
+    seat = minetest.add_entity(top_pos, "sit_on_beds:seat")
+    if not seat then
+        minetest.chat_send_player(pname, "Failed to create seat at top.")
+        players_sitting[pname] = nil
+        return false
+    end
+    seat:set_yaw(yaw)
+    players_sitting[pname].seat = seat
+
+    -- Attach player: offset {x=0, y=-0.45, z=0} puts player feet slightly below the seat (into the mattress)
+    -- x=0, z=0 means centered on the seat.
+    player:set_attach(seat, "", {x = 0, y = -0.45, z = 0}, {x = 0, y = 0, z = 0})
 
     -- Set the player's rotation to match the bed
     player:set_look_horizontal(yaw)
 
     -- Disable physics to prevent floating/falling
-    -- Newer versions require a table: {speed, jump, gravity, sneak, sneak_glitch}
     if player.set_physics_override then
         player:set_physics_override({speed = 0, jump = 0, gravity = 0, sneak = true})
     end
 
-    -- Apply sitting animation with slight delay to ensure attachment is processed
+    -- Apply sitting animation with slight delay
     minetest.after(0.1, function()
         local p = minetest.get_player_by_name(pname)
         if not p then return end
         
-        -- Force animation update
-        if p.set_animation_frame_offset then
-            p:set_animation_frame_offset(0)
-        end
-        
         local anim_set = false
         if minetest.get_modpath("mcl_player") and mcl_player and mcl_player.player_set_animation then
-            -- Mineclone 2 animation
             mcl_player.player_set_animation(p, "sit_mount", 30)
             anim_set = true
         elseif minetest.get_modpath("player_api") and player_api and player_api.set_animation then
-            -- Standard Minetest animation
             player_api.set_animation(p, "sit", 30)
             anim_set = true
         end
         
-        -- Fallback: try direct method if APIs not available
         if not anim_set and p.set_animation then
             p:set_animation("sit", 30)
         end
@@ -138,17 +155,40 @@ local function stand_up(player)
     -- Detach player from the seat
     player:set_detach()
 
-    -- Remove the seat entity
+    -- Remove the seat entity safely
     if sit_data.seat and sit_data.seat:get_luaentity() then
         sit_data.seat:remove()
+    elseif sit_data.seat then
+        sit_data.seat:remove() -- In case get_luaentity fails but object exists
     end
 
-    -- Position player next to the bed
-    local new_pos = vector.add(sit_data.pos, {x = 0.5, y = 0, z = 0.5})
+    -- Position player next to the bed (slightly offset to avoid clipping)
+    local new_pos = vector.add(sit_data.pos, {x = 0.5, y = 0.5, z = 0.5})
+    -- Move player one half-block in front of the bed based on yaw? Or just to the side.
+    -- Simple approach: place at center of node above the bed, then let gravity drop them if needed.
+    -- But we disabled gravity. Let's place them standing on the ground next to it.
+    -- Assuming bed is on floor, place player at pos + {0.5, 1, 0.5} (standing on top) then move sideways?
+    -- Better: Place player at the side of the bed.
+    local offset = {x = 0.5, y = 0, z = 0.5} -- Default to center-top of node below? No.
+    -- Let's just put them at the center of the node above the bed, then they can walk off.
+    -- Or simply: new_pos = sit_data.pos + {0.5, 1, 0.5} (standing on the bed) then move them off?
+    -- Simplest reliable way: Place them at the same X/Z but Y+1 (standing on the bed) then they can jump/walk?
+    -- No, let's place them adjacent.
+    local dir = vector.new(math.cos(sit_data.yaw), 0, math.sin(sit_data.yaw))
+    new_pos = vector.add(vector.add(sit_data.pos, {x=0.5, y=0, z=0.5}), dir) -- One block in front
+    
+    -- Ensure Y is at least the bed top + 1 (standing height)
+    new_pos.y = sit_data.pos.y + 1
+    
     player:set_pos(new_pos)
 
     -- Restore look direction
     player:set_look_horizontal(sit_data.yaw)
+
+    -- Restore physics
+    if player.set_physics_override then
+        player:set_physics_override({speed = 1, jump = 1, gravity = 1, sneak = false})
+    end
 
     -- Clear sitting data
     players_sitting[pname] = nil
