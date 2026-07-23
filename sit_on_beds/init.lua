@@ -228,9 +228,12 @@ local function wrap_bed_on_rightclick(original_callback)
             end
         end
 
-        -- If nighttime, use original behavior (sleep)
+        -- If nighttime or sitting failed, use original behavior (sleep)
         if original_callback then
             return original_callback(pos, node, clicker, itemstack, pointed_thing)
+        else
+            -- No original callback, just pass through (shouldn't happen for beds)
+            minetest.chat_send_player(pname, "Cannot use bed now.")
         end
     end
 end
