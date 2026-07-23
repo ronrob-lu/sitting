@@ -54,13 +54,14 @@ minetest.register_entity("sit_on_beds:seat", {
 local function sit_on_bed(player, pos, yaw)
     local pname = player:get_player_name()
 
-    -- Calculate sit position: Center of node horizontally, surface level vertically
-    -- Standard bed node is 1x1x1. Center is at x+0.5, z+0.5 relative to node corner.
-    -- We spawn the seat entity slightly above the node base so attachment Y can bring it down.
-    local sit_pos = vector.add(pos, {x = 0.5, y = 0.5, z = 0.5})
+    -- Calculate sit position: Center of node horizontally, top surface vertically
+    -- Node occupies [pos.x, pos.x+1], [pos.y, pos.y+1], [pos.z, pos.z+1].
+    -- Top surface center is {pos.x+0.5, pos.y+1, pos.z+0.5}.
+    -- We spawn the seat exactly where we want the player's feet to be.
+    local seat_pos = vector.add(pos, {x = 0.5, y = 1.0, z = 0.5})
     
     -- Create invisible seat entity at the sitting position
-    local seat = minetest.add_entity(sit_pos, "sit_on_beds:seat")
+    local seat = minetest.add_entity(seat_pos, "sit_on_beds:seat")
     
     if not seat then
         minetest.chat_send_player(pname, "Failed to create seat.")
@@ -77,39 +78,10 @@ local function sit_on_bed(player, pos, yaw)
         seat = seat
     }
 
-    -- Attach player to the seat entity
-    -- Offsets are relative to the seat entity's position
-    -- We want the player's feet to be on the bed surface (y=0 relative to node top)
-    -- Seat is at y+0.5 (middle of node). Player attach point is usually at feet.
-    -- So we need to move player down by roughly 0.5 to stand on top of the bed block? 
-    -- Actually, beds are often 0.5 high visually but full node collision.
-    -- Let's try putting the seat at the top surface (y + 0.5 from bottom, which is pos.y + 0.5)
-    -- And attach player with small negative Y to sink into mattress slightly.
-    
-    -- Refined offsets:
-    -- Seat spawned at pos + {0.5, 0.5, 0.5} (center of node)
-    -- To sit ON TOP, we want player feet at pos.y + 0.5 (top of node) or slightly lower for mattress.
-    -- If seat is at center (0.5), and we attach player with y = -0.5, player feet will be at seat_y - 0.5 = 0.0 (bottom). That's too low.
-    -- Let's spawn seat at top surface: pos + {0.5, 0.5, 0.5} is center. Top surface is pos.y + 1.
-    -- Let's change spawn pos to top surface: {x=0.5, y=1.0, z=0.5} relative to pos? No, pos is the node pos (integer).
-    -- Node occupies [pos.x, pos.x+1], [pos.y, pos.y+1], [pos.z, pos.z+1].
-    -- Top surface center is {pos.x+0.5, pos.y+1, pos.z+0.5}.
-    -- Let's spawn seat there.
-    
-    seat:remove() -- Remove the one created at center
-    local top_pos = vector.add(pos, {x = 0.5, y = 1.0, z = 0.5})
-    seat = minetest.add_entity(top_pos, "sit_on_beds:seat")
-    if not seat then
-        minetest.chat_send_player(pname, "Failed to create seat at top.")
-        players_sitting[pname] = nil
-        return false
-    end
-    seat:set_yaw(yaw)
-    players_sitting[pname].seat = seat
-
-    -- Attach player: offset {x=0, y=-0.45, z=0} puts player feet slightly below the seat (into the mattress)
-    -- x=0, z=0 means centered on the seat.
-    player:set_attach(seat, "", {x = 0, y = -0.45, z = 0}, {x = 0, y = 0, z = 0})
+    -- Attach player with zero offset since seat is already at the correct position
+    -- The player will attach with their pivot point at the seat location
+    -- For sitting, we want the player slightly lower so they sink into the mattress
+    player:set_attach(seat, "", {x = 0, y = -0.3, z = 0}, {x = 0, y = 0, z = 0})
 
     -- Set the player's rotation to match the bed
     player:set_look_horizontal(yaw)
@@ -300,10 +272,9 @@ local function wrap_bed_on_rightclick(original_callback)
         -- If nighttime or sitting failed, use original behavior (sleep)
         if original_callback then
             return original_callback(pos, node, clicker, itemstack, pointed_thing)
-        else
-            -- No original callback, just pass through (shouldn't happen for beds)
-            minetest.chat_send_player(pname, "Cannot use bed now.")
         end
+        -- If no original callback exists, the bed has no special behavior
+        -- Just return without doing anything special
     end
 end
 
